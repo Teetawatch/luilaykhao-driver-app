@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/manifest_model.dart';
 import '../models/trip_model.dart';
 import '../models/van_model.dart';
 import '../services/location_service.dart';
@@ -16,7 +17,6 @@ class TripProvider extends ChangeNotifier {
   final LocationService _locationService = LocationService();
   static const String _tokenKey = 'driver_auth_token';
 
-  List<Van> _availableVans = [];
   List<Trip> _todaySchedules = [];
 
   Map<String, dynamic>? _driverUser;
@@ -28,9 +28,7 @@ class TripProvider extends ChangeNotifier {
   bool _isRestoringSession = true;
   bool _isLoggingIn = false;
   bool _isTracking = false;
-  bool _isLoadingVans = false;
   bool _isLoadingSchedules = false;
-  bool _isCheckingIn = false;
   String _statusMessage = '';
 
   double _currentSpeed = 0;
@@ -41,7 +39,6 @@ class TripProvider extends ChangeNotifier {
   bool _isReportingLocation = false;
 
   // Getters
-  List<Van> get availableVans => _availableVans;
   List<Trip> get todaySchedules => _todaySchedules;
   Map<String, dynamic>? get driverUser => _driverUser;
   bool get isAuthenticated => _token != null;
@@ -51,13 +48,17 @@ class TripProvider extends ChangeNotifier {
   Van? get selectedVan => _selectedVan;
   Trip? get selectedSchedule => _selectedSchedule;
   bool get isTracking => _isTracking;
-  bool get isLoadingVans => _isLoadingVans;
   bool get isLoadingSchedules => _isLoadingSchedules;
-  bool get isCheckingIn => _isCheckingIn;
   String get statusMessage => _statusMessage;
   double get currentSpeed => _currentSpeed;
   LatLng? get currentLocation => _currentLocation;
   LocationService get locationService => _locationService;
+
+  /// True when the active schedule has a vehicle, so GPS updates can be
+  /// attributed to it and shown to customers. When false, location sharing
+  /// is impossible and check-in is the only working feature.
+  bool get isLocationShared =>
+      (_selectedVan?.id ?? _selectedSchedule?.vehicleId) != null;
 
   Map<String, String> get _authHeaders => {
     'Accept': 'application/json',
@@ -232,106 +233,35 @@ class TripProvider extends ChangeNotifier {
     }
   }
 
-  Future<CheckInResult> checkInQr(String rawCode) async {
-    if (_selectedSchedule == null) {
-      return CheckInResult.failure('กรุณาเลือกรอบเดินทางก่อนสแกน');
-    }
-
-    _isCheckingIn = true;
-    notifyListeners();
-
+  /// Fetch the passenger manifest for a schedule. Throws [ManifestException]
+  /// with a user-facing message when the request fails.
+  Future<TripManifest> fetchManifest(int scheduleId) async {
+    final http.Response response;
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/driver/check-in'),
-        headers: {..._authHeaders, 'Content-Type': 'application/json'},
-        body: json.encode({
-          'qr_code': rawCode,
-          'schedule_id': _selectedSchedule!.id,
-        }),
+      response = await http.get(
+        Uri.parse('$baseUrl/driver/schedules/$scheduleId/manifest'),
+        headers: _authHeaders,
       );
-      final result = json.decode(response.body) as Map<String, dynamic>;
-      if (response.statusCode >= 200 &&
-          response.statusCode < 300 &&
-          result['success'] == true) {
-        await fetchDriverContext();
-        return CheckInResult.success(
-          result['message']?.toString() ?? 'เช็กอินสำเร็จ',
-          Map<String, dynamic>.from(result['data'] as Map),
-        );
-      }
+    } catch (_) {
+      throw const ManifestException('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+    }
 
-      return CheckInResult.failure(
-        result['message']?.toString() ?? 'เช็กอินไม่สำเร็จ',
+    Map<String, dynamic> result;
+    try {
+      result = json.decode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw const ManifestException('ข้อมูลจากเซิร์ฟเวอร์ไม่ถูกต้อง');
+    }
+
+    if (response.statusCode != 200 || result['success'] != true) {
+      throw ManifestException(
+        result['message']?.toString() ?? 'โหลดรายชื่อผู้โดยสารไม่สำเร็จ',
       );
-    } catch (e) {
-      return CheckInResult.failure('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
-    } finally {
-      _isCheckingIn = false;
-      notifyListeners();
     }
-  }
 
-  /// Fetch all vehicles from backend
-  Future<void> fetchVans() async {
-    _isLoadingVans = true;
-    _statusMessage = 'กำลังโหลดข้อมูลรถ...';
-    notifyListeners();
-
-    try {
-      final response = await http.get(Uri.parse('$baseUrl/vehicles'));
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> result = json.decode(response.body);
-        if (result['success'] == true) {
-          final List<dynamic> data = result['data'];
-          _availableVans = data.map((v) => Van.fromJson(v)).toList();
-        }
-      } else {
-        _statusMessage = 'เกิดข้อผิดพลาดในการโหลดข้อมูลรถ';
-      }
-    } catch (e) {
-      _statusMessage = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
-    } finally {
-      _isLoadingVans = false;
-      notifyListeners();
-    }
-  }
-
-  /// Select a van and fetch today's schedules
-  Future<void> selectVan(Van van) async {
-    _selectedVan = van;
-    _selectedSchedule = null;
-    _todaySchedules = [];
-    _isLoadingSchedules = true;
-    notifyListeners();
-
-    try {
-      final url = '$baseUrl/vehicles/${van.id}/schedules/today';
-      debugPrint('[TripProvider] GET $url');
-      final response = await http.get(Uri.parse(url));
-      debugPrint('[TripProvider] Status: ${response.statusCode}');
-      debugPrint('[TripProvider] Body: ${response.body}');
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> result = json.decode(response.body);
-        if (result['success'] == true) {
-          final List<dynamic> data = result['data'];
-          debugPrint('[TripProvider] Schedules count: ${data.length}');
-          _todaySchedules = data.map((s) => Trip.fromJson(s)).toList();
-        } else {
-          debugPrint(
-            '[TripProvider] success=false, message=${result['message']}',
-          );
-        }
-      } else {
-        debugPrint('[TripProvider] Non-200 response: ${response.body}');
-        _statusMessage = 'เกิดข้อผิดพลาด: ${response.statusCode}';
-      }
-    } catch (e) {
-      debugPrint('[TripProvider] Exception: $e');
-      _statusMessage = 'ไม่สามารถโหลดรอบเดินทางได้: $e';
-    } finally {
-      _isLoadingSchedules = false;
-      notifyListeners();
-    }
+    return TripManifest.fromJson(
+      Map<String, dynamic>.from(result['data'] as Map),
+    );
   }
 
   /// Select a schedule for the trip
@@ -405,8 +335,25 @@ class TripProvider extends ChangeNotifier {
       _reportCurrentLocation();
     });
 
+    // Tell the backend to push a "departed" alert to passengers. Non-blocking:
+    // tracking works regardless of whether this notification is delivered.
+    _notifyDeparted(_currentTrip!.id);
+
     notifyListeners();
     return true;
+  }
+
+  /// Ask the backend to send the "trip departed" push to passengers. The
+  /// backend de-duplicates so repeated calls in a day send only once.
+  Future<void> _notifyDeparted(int scheduleId) async {
+    try {
+      await http.post(
+        Uri.parse('$baseUrl/driver/schedules/$scheduleId/depart'),
+        headers: _authHeaders,
+      );
+    } catch (_) {
+      // Non-critical: ignore so a failed notification never blocks the trip.
+    }
   }
 
   /// Report location update to backend API
@@ -427,14 +374,19 @@ class TripProvider extends ChangeNotifier {
     final vehicleId = _selectedVan?.id ?? _selectedSchedule?.vehicleId;
     if (vehicleId == null) return;
 
+    final heading = _locationService.lastKnownHeading;
+    final hasHeading = heading.isFinite && heading >= 0 && heading <= 360;
+
     try {
       await http.post(
         Uri.parse('$baseUrl/tracking/update'),
+        headers: _authHeaders,
         body: {
           'vehicle_id': vehicleId.toString(),
           'latitude': location.latitude.toString(),
           'longitude': location.longitude.toString(),
           'speed': speed.toString(),
+          if (hasHeading) 'heading': heading.toString(),
           'recorded_at': DateTime.now().toIso8601String(),
         },
       );
@@ -468,25 +420,5 @@ class TripProvider extends ChangeNotifier {
     _locationReportTimer?.cancel();
     _locationService.dispose();
     super.dispose();
-  }
-}
-
-class CheckInResult {
-  final bool success;
-  final String message;
-  final Map<String, dynamic>? booking;
-
-  const CheckInResult({
-    required this.success,
-    required this.message,
-    this.booking,
-  });
-
-  factory CheckInResult.success(String message, Map<String, dynamic> booking) {
-    return CheckInResult(success: true, message: message, booking: booking);
-  }
-
-  factory CheckInResult.failure(String message) {
-    return CheckInResult(success: false, message: message);
   }
 }

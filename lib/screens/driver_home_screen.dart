@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 import '../models/trip_model.dart';
 import '../providers/trip_provider.dart';
 import '../theme/app_theme.dart';
+import 'manifest_screen.dart';
 import 'map_screen.dart';
-import 'qr_check_in_screen.dart';
 
 class DriverHomeScreen extends StatefulWidget {
   const DriverHomeScreen({super.key});
@@ -134,12 +134,13 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                             onPressed: () {
                               Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (_) => const QrCheckInScreen(),
+                                  builder: (_) =>
+                                      ManifestScreen(schedule: selected),
                                 ),
                               );
                             },
-                            icon: const Icon(Icons.qr_code_scanner_rounded),
-                            label: const Text('สแกนเช็กอิน'),
+                            icon: const Icon(Icons.groups_rounded),
+                            label: const Text('รายชื่อผู้โดยสาร'),
                           ),
                         ),
                       ],

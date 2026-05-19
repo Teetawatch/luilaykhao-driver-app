@@ -1,5 +1,35 @@
 import 'package:latlong2/latlong.dart';
 
+class PickupPoint {
+  final int id;
+  final String location;
+  final String? regionLabel;
+  final LatLng? coords;
+  final String? notes;
+
+  const PickupPoint({
+    required this.id,
+    required this.location,
+    this.regionLabel,
+    this.coords,
+    this.notes,
+  });
+
+  factory PickupPoint.fromJson(Map<String, dynamic> json) {
+    final lat = json['latitude'];
+    final lng = json['longitude'];
+    return PickupPoint(
+      id: json['id'] is int ? json['id'] : int.parse(json['id'].toString()),
+      location: json['location']?.toString() ?? '',
+      regionLabel: json['region_label']?.toString(),
+      coords: (lat != null && lng != null)
+          ? LatLng((lat as num).toDouble(), (lng as num).toDouble())
+          : null,
+      notes: json['notes']?.toString(),
+    );
+  }
+}
+
 class Trip {
   final int id;
   final String title;
@@ -18,6 +48,7 @@ class Trip {
   final String? licensePlate;
   final String? driverName;
   final String? driverPhone;
+  final List<PickupPoint> pickupPoints;
 
   // Runtime tracking data
   LatLng? currentLocation;
@@ -42,6 +73,7 @@ class Trip {
     this.licensePlate,
     this.driverName,
     this.driverPhone,
+    this.pickupPoints = const [],
     this.currentLocation,
     this.currentSpeed,
     this.isActive = true,
@@ -78,6 +110,12 @@ class Trip {
       licensePlate: vehicle['license_plate']?.toString(),
       driverName: vehicle['driver_name']?.toString(),
       driverPhone: vehicle['driver_phone']?.toString(),
+      pickupPoints: (json['pickup_points'] as List?)
+              ?.map(
+                (p) => PickupPoint.fromJson(Map<String, dynamic>.from(p as Map)),
+              )
+              .toList() ??
+          const [],
     );
   }
 

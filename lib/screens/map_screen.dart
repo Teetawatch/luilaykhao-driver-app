@@ -3,12 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import '../models/trip_model.dart';
 import '../providers/trip_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/eta_panel.dart';
 import '../widgets/speed_indicator.dart';
 import '../widgets/trip_controls.dart';
-import 'qr_check_in_screen.dart';
+import 'manifest_screen.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -54,6 +55,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             children: [
               _buildMap(provider),
               _buildTopBar(provider),
+              if (!provider.isLocationShared) _buildNoVehicleBanner(),
               _buildFloatingControls(provider),
               _buildBottomPanel(provider),
             ],
@@ -86,6 +88,20 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         if (provider.currentTrip != null)
           MarkerLayer(
             markers: [
+              for (final point in provider.currentTrip!.pickupPoints)
+                if (point.coords != null)
+                  Marker(
+                    point: point.coords!,
+                    width: 150,
+                    height: 56,
+                    alignment: Alignment.topCenter,
+                    child: _buildPickupMarker(point),
+                  ),
+            ],
+          ),
+        if (provider.currentTrip != null)
+          MarkerLayer(
+            markers: [
               Marker(
                 point: provider.currentTrip!.destination,
                 width: 60,
@@ -109,6 +125,48 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               ),
             ],
           ),
+      ],
+    );
+  }
+
+  Widget _buildPickupMarker(PickupPoint point) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: AppTheme.accentColor,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2.5),
+            boxShadow: AppTheme.softShadow,
+          ),
+          child: const Icon(
+            Icons.person_pin_circle_rounded,
+            color: Colors.white,
+            size: 18,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            boxShadow: AppTheme.softShadow,
+          ),
+          child: Text(
+            point.location,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textMain,
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -203,6 +261,38 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     );
   }
 
+  Widget _buildNoVehicleBanner() {
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 68,
+      left: 16,
+      right: 16,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppTheme.warningColor,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: AppTheme.softShadow,
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'รอบนี้ยังไม่ได้ผูกกับรถ ลูกค้าจะไม่เห็นตำแหน่งของคุณ',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildFloatingControls(TripProvider provider) {
     return Positioned(
       bottom: 240,
@@ -237,25 +327,27 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
               if (provider.currentTrip != null)
                 ETAPanel(trip: provider.currentTrip!),
               const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const QrCheckInScreen(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.qr_code_scanner_rounded),
-                  label: const Text('สแกนเช็กอิน'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppTheme.accentColor,
-                    foregroundColor: Colors.white,
+              if (provider.currentTrip != null)
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ManifestScreen(schedule: provider.currentTrip!),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.groups_rounded),
+                    label: const Text('รายชื่อผู้โดยสาร'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppTheme.accentColor,
+                      foregroundColor: Colors.white,
+                    ),
                   ),
                 ),
-              ),
               const SizedBox(height: 12),
               TripControls(
                 isTracking: provider.isTracking,

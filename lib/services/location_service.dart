@@ -15,6 +15,7 @@ class LocationService {
 
   LatLng? lastKnownLocation;
   double lastKnownSpeed = 0;
+  double lastKnownHeading = 0;
 
   /// Check and request location permissions
   Future<bool> checkPermissions() async {
@@ -49,6 +50,7 @@ class LocationService {
       final latLng = LatLng(position.latitude, position.longitude);
       lastKnownLocation = latLng;
       lastKnownSpeed = position.speed * 3.6; // m/s to km/h
+      lastKnownHeading = position.heading;
       return latLng;
     } catch (e) {
       return null;
@@ -84,6 +86,7 @@ class LocationService {
           (Position position) {
             final latLng = LatLng(position.latitude, position.longitude);
             lastKnownLocation = latLng;
+            lastKnownHeading = position.heading;
 
             // Convert speed from m/s to km/h, minimum 0
             final speedKmh = position.speed >= 0 ? position.speed * 3.6 : 0.0;
