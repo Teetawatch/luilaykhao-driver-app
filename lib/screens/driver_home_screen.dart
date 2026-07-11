@@ -7,6 +7,7 @@ import '../providers/trip_provider.dart';
 import '../theme/app_theme.dart';
 import 'manifest_screen.dart';
 import 'map_screen.dart';
+import 'pre_trip_inspection_screen.dart';
 
 class DriverHomeScreen extends StatefulWidget {
   const DriverHomeScreen({super.key});
@@ -107,6 +108,28 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                             onPressed: () async {
                               final navigator = Navigator.of(context);
                               final messenger = ScaffoldMessenger.of(context);
+
+                              // Gate departure on a completed pre-trip
+                              // inspection — check the server once, then open
+                              // the checklist if the vehicle isn't inspected yet.
+                              if (!provider.isInspected(selected.id)) {
+                                final onServer = await provider
+                                    .hasBackendInspection(selected.id);
+                                if (!mounted) return;
+                                if (!onServer) {
+                                  final done = await navigator.push<bool>(
+                                    MaterialPageRoute(
+                                      builder: (_) => PreTripInspectionScreen(
+                                        scheduleId: selected.id,
+                                        scheduleTitle: selected.title,
+                                      ),
+                                    ),
+                                  );
+                                  if (!mounted) return;
+                                  if (done != true) return;
+                                }
+                              }
+
                               final success = await provider.startTrip();
                               if (!mounted) return;
                               if (success) {

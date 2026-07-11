@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/incident_model.dart';
+import '../models/inspection_model.dart';
 import '../models/manifest_model.dart';
 import '../models/trip_model.dart';
 import '../models/van_model.dart';
@@ -31,12 +33,25 @@ class TripProvider extends ChangeNotifier {
   bool _isLoadingSchedules = false;
   String _statusMessage = '';
 
+  List<PickupGroup> _pickupGroups = [];
+  bool _isLoadingPickupGroups = false;
+
+  /// Schedules whose pre-trip inspection is known done (this session or found
+  /// on the server) — gates "เริ่มติดตาม".
+  final Set<int> _inspectedSchedules = {};
+
   double _currentSpeed = 0;
   LatLng? _currentLocation;
   StreamSubscription<LatLng>? _locationSub;
   StreamSubscription<double>? _speedSub;
   Timer? _locationReportTimer;
   bool _isReportingLocation = false;
+
+  /// Nudge the driver to rest after this many hours of continuous driving.
+  static const int breakIntervalHours = 2;
+  DateTime? _drivingSince;
+  Timer? _fatigueTimer;
+  bool _breakDue = false;
 
   // Getters
   List<Trip> get todaySchedules => _todaySchedules;
@@ -48,11 +63,23 @@ class TripProvider extends ChangeNotifier {
   Van? get selectedVan => _selectedVan;
   Trip? get selectedSchedule => _selectedSchedule;
   bool get isTracking => _isTracking;
+  List<PickupGroup> get pickupGroups => _pickupGroups;
+  bool get isLoadingPickupGroups => _isLoadingPickupGroups;
   bool get isLoadingSchedules => _isLoadingSchedules;
   String get statusMessage => _statusMessage;
   double get currentSpeed => _currentSpeed;
   LatLng? get currentLocation => _currentLocation;
   LocationService get locationService => _locationService;
+
+  /// How long the driver has been driving since the trip started or the last
+  /// acknowledged rest break.
+  Duration get drivingElapsed => _drivingSince == null
+      ? Duration.zero
+      : DateTime.now().difference(_drivingSince!);
+
+  /// True once continuous driving crosses [breakIntervalHours] — the map shows
+  /// a rest prompt until [acknowledgeBreak] is called.
+  bool get breakDue => _breakDue;
 
   /// True when the active schedule has a vehicle, so GPS updates can be
   /// attributed to it and shown to customers. When false, location sharing
@@ -189,6 +216,7 @@ class TripProvider extends ChangeNotifier {
     _todaySchedules = [];
     _selectedSchedule = null;
     _selectedVan = null;
+    _inspectedSchedules.clear();
     notifyListeners();
   }
 
@@ -231,6 +259,232 @@ class TripProvider extends ChangeNotifier {
       _isLoadingSchedules = false;
       notifyListeners();
     }
+  }
+
+  /// Report an on-trip incident (accident / injury / traffic). Sends as
+  /// multipart when a photo is attached, plain form otherwise. Throws
+  /// [IncidentException] with a user-facing message on failure.
+  Future<Incident> reportIncident({
+    required int scheduleId,
+    required String severity,
+    required String description,
+    String? passengerName,
+    double? latitude,
+    double? longitude,
+    String? photoPath,
+  }) async {
+    final fields = <String, String>{
+      'severity': severity,
+      'description': description,
+      if (passengerName != null && passengerName.trim().isNotEmpty)
+        'passenger_name': passengerName.trim(),
+      if (latitude != null) 'latitude': latitude.toString(),
+      if (longitude != null) 'longitude': longitude.toString(),
+    };
+
+    final uri = Uri.parse('$baseUrl/driver/schedules/$scheduleId/incidents');
+    final http.Response response;
+    try {
+      if (photoPath != null && photoPath.isNotEmpty) {
+        final request = http.MultipartRequest('POST', uri)
+          ..headers.addAll(_authHeaders)
+          ..fields.addAll(fields)
+          ..files.add(await http.MultipartFile.fromPath('photo', photoPath));
+        response = await http.Response.fromStream(await request.send());
+      } else {
+        response = await http.post(uri, headers: _authHeaders, body: fields);
+      }
+    } catch (_) {
+      throw const IncidentException('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+    }
+
+    Map<String, dynamic> result;
+    try {
+      result = json.decode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw const IncidentException('ข้อมูลจากเซิร์ฟเวอร์ไม่ถูกต้อง');
+    }
+
+    if (response.statusCode != 200 || result['success'] != true) {
+      throw IncidentException(
+        result['message']?.toString() ?? 'แจ้งเหตุไม่สำเร็จ',
+      );
+    }
+
+    return Incident.fromJson(Map<String, dynamic>.from(result['data'] as Map));
+  }
+
+  /// Incidents logged for a schedule (most recent first).
+  Future<List<Incident>> fetchIncidents(int scheduleId) async {
+    final http.Response response;
+    try {
+      response = await http.get(
+        Uri.parse('$baseUrl/driver/schedules/$scheduleId/incidents'),
+        headers: _authHeaders,
+      );
+    } catch (_) {
+      throw const IncidentException('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+    }
+
+    Map<String, dynamic> result;
+    try {
+      result = json.decode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw const IncidentException('ข้อมูลจากเซิร์ฟเวอร์ไม่ถูกต้อง');
+    }
+
+    if (response.statusCode != 200 || result['success'] != true) {
+      throw IncidentException(
+        result['message']?.toString() ?? 'โหลดรายการแจ้งเหตุไม่สำเร็จ',
+      );
+    }
+
+    return List<dynamic>.from(result['data'] ?? [])
+        .map((e) => Incident.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  /// Mark an incident resolved. Returns the updated incident.
+  Future<Incident> resolveIncident(int incidentId) async {
+    final http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('$baseUrl/driver/incidents/$incidentId/resolve'),
+        headers: _authHeaders,
+      );
+    } catch (_) {
+      throw const IncidentException('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+    }
+
+    Map<String, dynamic> result;
+    try {
+      result = json.decode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw const IncidentException('ข้อมูลจากเซิร์ฟเวอร์ไม่ถูกต้อง');
+    }
+
+    if (response.statusCode != 200 || result['success'] != true) {
+      throw IncidentException(
+        result['message']?.toString() ?? 'ปิดเคสไม่สำเร็จ',
+      );
+    }
+
+    return Incident.fromJson(Map<String, dynamic>.from(result['data'] as Map));
+  }
+
+  /// Load pickup groups (passengers grouped by pickup point, with coords) so
+  /// the map can plot tappable markers. Best-effort: keeps the previous set on
+  /// failure so a transient error never blanks the map.
+  Future<void> loadPickupGroups(int scheduleId) async {
+    _isLoadingPickupGroups = true;
+    notifyListeners();
+    try {
+      final manifest = await fetchManifest(scheduleId);
+      _pickupGroups = manifest.pickupGroups;
+    } on ManifestException {
+      // Keep whatever we already have.
+    } finally {
+      _isLoadingPickupGroups = false;
+      notifyListeners();
+    }
+  }
+
+  /// Fetch the pre-trip inspection template + latest submission for a schedule.
+  Future<InspectionState> fetchInspection(int scheduleId) async {
+    final http.Response response;
+    try {
+      response = await http.get(
+        Uri.parse('$baseUrl/driver/schedules/$scheduleId/inspection'),
+        headers: _authHeaders,
+      );
+    } catch (_) {
+      throw const InspectionException('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+    }
+
+    Map<String, dynamic> result;
+    try {
+      result = json.decode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw const InspectionException('ข้อมูลจากเซิร์ฟเวอร์ไม่ถูกต้อง');
+    }
+
+    if (response.statusCode != 200 || result['success'] != true) {
+      throw InspectionException(
+        result['message']?.toString() ?? 'โหลดรายการตรวจสภาพรถไม่สำเร็จ',
+      );
+    }
+
+    return InspectionState.fromJson(
+      Map<String, dynamic>.from(result['data'] as Map),
+    );
+  }
+
+  /// Whether this schedule's vehicle has been inspected (gates trip start).
+  bool isInspected(int scheduleId) => _inspectedSchedules.contains(scheduleId);
+
+  void markInspected(int scheduleId) {
+    _inspectedSchedules.add(scheduleId);
+    notifyListeners();
+  }
+
+  /// Best-effort check of whether the server already has an inspection for this
+  /// schedule; marks it locally so the start gate can pass. Never throws.
+  Future<bool> hasBackendInspection(int scheduleId) async {
+    try {
+      final state = await fetchInspection(scheduleId);
+      if (state.latest != null) {
+        _inspectedSchedules.add(scheduleId);
+        return true;
+      }
+    } catch (_) {
+      // Offline / error: treat as not-yet-inspected so the checklist opens.
+    }
+    return false;
+  }
+
+  /// Submit a pre-trip inspection. [items] maps each item key to its ok flag.
+  Future<Inspection> submitInspection({
+    required int scheduleId,
+    required Map<String, bool> items,
+    String? note,
+    double? latitude,
+    double? longitude,
+  }) async {
+    final body = <String, dynamic>{
+      'note': note,
+      'latitude': ?latitude,
+      'longitude': ?longitude,
+      'items': [
+        for (final entry in items.entries) {'key': entry.key, 'ok': entry.value},
+      ],
+    };
+
+    final http.Response response;
+    try {
+      response = await http.post(
+        Uri.parse('$baseUrl/driver/schedules/$scheduleId/inspection'),
+        headers: {..._authHeaders, 'Content-Type': 'application/json'},
+        body: json.encode(body),
+      );
+    } catch (_) {
+      throw const InspectionException('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+    }
+
+    Map<String, dynamic> result;
+    try {
+      result = json.decode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw const InspectionException('ข้อมูลจากเซิร์ฟเวอร์ไม่ถูกต้อง');
+    }
+
+    if (response.statusCode != 200 || result['success'] != true) {
+      throw InspectionException(
+        result['message']?.toString() ?? 'บันทึกผลตรวจไม่สำเร็จ',
+      );
+    }
+
+    _inspectedSchedules.add(scheduleId);
+    return Inspection.fromJson(Map<String, dynamic>.from(result['data'] as Map));
   }
 
   /// Fetch the passenger manifest for a schedule. Throws [ManifestException]
@@ -310,6 +564,7 @@ class TripProvider extends ChangeNotifier {
 
     _isTracking = true;
     _statusMessage = 'กำลังแบ่งปันตำแหน่งของคุณ...';
+    _startFatigueClock();
     _locationService.startTracking();
 
     _locationSub = _locationService.locationStream.listen((LatLng location) {
@@ -395,12 +650,38 @@ class TripProvider extends ChangeNotifier {
     }
   }
 
+  /// Start counting continuous driving time and schedule rest-break nudges.
+  void _startFatigueClock() {
+    _drivingSince = DateTime.now();
+    _breakDue = false;
+    _fatigueTimer?.cancel();
+    _fatigueTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (_drivingSince == null || _breakDue) return;
+      if (DateTime.now().difference(_drivingSince!) >=
+          const Duration(hours: breakIntervalHours)) {
+        _breakDue = true;
+        notifyListeners();
+      }
+    });
+  }
+
+  /// Driver acknowledged a rest break — restart the driving clock.
+  void acknowledgeBreak() {
+    _drivingSince = DateTime.now();
+    _breakDue = false;
+    notifyListeners();
+  }
+
   /// Stop the trip session
   void stopTrip() {
     _locationSub?.cancel();
     _speedSub?.cancel();
     _locationReportTimer?.cancel();
     _locationReportTimer = null;
+    _fatigueTimer?.cancel();
+    _fatigueTimer = null;
+    _drivingSince = null;
+    _breakDue = false;
     _locationService.stopTracking();
     _isTracking = false;
 
@@ -410,6 +691,7 @@ class TripProvider extends ChangeNotifier {
 
     _statusMessage = 'จบการเดินทางแล้ว';
     _currentTrip = null;
+    _pickupGroups = [];
     notifyListeners();
   }
 
@@ -418,6 +700,7 @@ class TripProvider extends ChangeNotifier {
     _locationSub?.cancel();
     _speedSub?.cancel();
     _locationReportTimer?.cancel();
+    _fatigueTimer?.cancel();
     _locationService.dispose();
     super.dispose();
   }

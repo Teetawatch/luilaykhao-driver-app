@@ -8,6 +8,8 @@ import '../models/manifest_model.dart';
 import '../models/trip_model.dart';
 import '../providers/trip_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/seat_map_panel.dart';
+import 'incident_list_screen.dart';
 
 class ManifestScreen extends StatefulWidget {
   final Trip schedule;
@@ -82,6 +84,18 @@ class _ManifestScreenState extends State<ManifestScreen> {
         title: const Text('รายชื่อผู้โดยสาร'),
         actions: [
           IconButton(
+            tooltip: 'แจ้งเหตุระหว่างทาง',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => IncidentListScreen(
+                  scheduleId: widget.schedule.id,
+                  scheduleTitle: widget.schedule.title,
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.report_gmailerrorred_rounded),
+          ),
+          IconButton(
             tooltip: 'รีเฟรช',
             onPressed: _loading ? null : _load,
             icon: const Icon(Icons.refresh_rounded),
@@ -137,9 +151,17 @@ class _ManifestScreenState extends State<ManifestScreen> {
         itemCount: manifest.entries.length + 1,
         itemBuilder: (context, index) {
           if (index == 0) {
-            return _ManifestHeader(
-              schedule: widget.schedule,
-              manifest: manifest,
+            return Column(
+              children: [
+                _ManifestHeader(
+                  schedule: widget.schedule,
+                  manifest: manifest,
+                ),
+                if (manifest.seatMap != null) ...[
+                  SeatMapPanel(seatMap: manifest.seatMap!),
+                  const SizedBox(height: 14),
+                ],
+              ],
             );
           }
           final entry = manifest.entries[index - 1];
@@ -322,6 +344,7 @@ class _BookingCard extends StatelessWidget {
           _ContactRow(
             name: entry.contactName ?? 'ไม่ระบุชื่อผู้จอง',
             phone: contactPhone,
+            avatarUrl: entry.contactAvatarUrl,
             onCall: onCall,
           ),
           if (pickupLabel != null) ...[
@@ -396,23 +419,33 @@ class _CheckInChip extends StatelessWidget {
 class _ContactRow extends StatelessWidget {
   final String name;
   final String phone;
+  final String? avatarUrl;
   final Future<void> Function(String phone) onCall;
 
   const _ContactRow({
     required this.name,
     required this.phone,
     required this.onCall,
+    this.avatarUrl,
   });
 
   @override
   Widget build(BuildContext context) {
+    final avatar = avatarUrl?.trim() ?? '';
     return Row(
       children: [
-        const Icon(
-          Icons.person_rounded,
-          size: 17,
-          color: AppTheme.textSecondary,
-        ),
+        if (avatar.isNotEmpty)
+          CircleAvatar(
+            radius: 12,
+            backgroundColor: AppTheme.bgLight,
+            backgroundImage: NetworkImage(avatar),
+          )
+        else
+          const Icon(
+            Icons.person_rounded,
+            size: 17,
+            color: AppTheme.textSecondary,
+          ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
@@ -533,6 +566,7 @@ class _PassengerRow extends StatelessWidget {
     final name = nickname.isEmpty
         ? passenger.name
         : '${passenger.name} ($nickname)';
+    final seat = passenger.seatLabel?.trim() ?? '';
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
@@ -557,7 +591,47 @@ class _PassengerRow extends StatelessWidget {
               ),
             ),
           ),
+          if (seat.isNotEmpty) ...[
+            _SeatChip(seat: seat),
+            const SizedBox(width: 8),
+          ],
           if (phone.isNotEmpty) _CallButton(phone: phone, onCall: onCall),
+        ],
+      ),
+    );
+  }
+}
+
+class _SeatChip extends StatelessWidget {
+  final String seat;
+
+  const _SeatChip({required this.seat});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppTheme.accentColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.event_seat_rounded,
+            size: 13,
+            color: AppTheme.accentColor,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            seat,
+            style: GoogleFonts.anuphan(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.accentColor,
+            ),
+          ),
         ],
       ),
     );

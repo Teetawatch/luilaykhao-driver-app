@@ -10,14 +10,22 @@ class ManifestPassenger {
   final String name;
   final String? nickname;
   final String? phone;
+  final String? seatLabel;
 
-  const ManifestPassenger({required this.name, this.nickname, this.phone});
+  const ManifestPassenger({
+    required this.name,
+    this.nickname,
+    this.phone,
+    this.seatLabel,
+  });
 
   factory ManifestPassenger.fromJson(Map<String, dynamic> json) {
+    final seat = json['seat_label']?.toString().trim();
     return ManifestPassenger(
       name: json['name']?.toString() ?? '',
       nickname: json['nickname']?.toString(),
       phone: json['phone']?.toString(),
+      seatLabel: (seat == null || seat.isEmpty) ? null : seat,
     );
   }
 }
@@ -29,6 +37,7 @@ class ManifestEntry {
   final DateTime? checkedInAt;
   final String? contactName;
   final String? contactPhone;
+  final String? contactAvatarUrl;
   final bool isGroup;
   final String? groupName;
   final String? pickupRegion;
@@ -46,6 +55,7 @@ class ManifestEntry {
     this.checkedInAt,
     this.contactName,
     this.contactPhone,
+    this.contactAvatarUrl,
     this.isGroup = false,
     this.groupName,
     this.pickupRegion,
@@ -77,6 +87,7 @@ class ManifestEntry {
           : null,
       contactName: json['contact_name']?.toString(),
       contactPhone: json['contact_phone']?.toString(),
+      contactAvatarUrl: json['contact_avatar_url']?.toString(),
       isGroup: json['is_group'] == true,
       groupName: json['group_name']?.toString(),
       pickupRegion: json['pickup_region']?.toString(),
@@ -99,17 +110,231 @@ class ManifestEntry {
   }
 }
 
+/// A passenger as grouped under a pickup point (map tap sheet).
+class PickupGroupPassenger {
+  final String fullName;
+  final String? nickname;
+  final String? phone;
+  final String? seatLabel;
+  final bool checkedIn;
+  final String? avatarUrl;
+
+  const PickupGroupPassenger({
+    required this.fullName,
+    this.nickname,
+    this.phone,
+    this.seatLabel,
+    this.checkedIn = false,
+    this.avatarUrl,
+  });
+
+  factory PickupGroupPassenger.fromJson(Map<String, dynamic> json) {
+    final seat = json['seat_label']?.toString().trim();
+    return PickupGroupPassenger(
+      fullName: json['full_name']?.toString() ?? json['name']?.toString() ?? '',
+      nickname: json['nickname']?.toString(),
+      phone: json['phone']?.toString(),
+      seatLabel: (seat == null || seat.isEmpty) ? null : seat,
+      checkedIn: json['checked_in'] == true,
+      avatarUrl: json['avatar_url']?.toString(),
+    );
+  }
+}
+
+/// All passengers to pick up at one point, with coordinates so the driver map
+/// can plot a tappable marker.
+class PickupGroup {
+  final int? id;
+  final String label;
+  final String? regionLabel;
+  final double? lat;
+  final double? lng;
+  final String? mapUrl;
+  final String? notes;
+  final bool isCustom;
+  final bool completed;
+  final int passengerCount;
+  final int checkedInCount;
+  final List<PickupGroupPassenger> passengers;
+
+  const PickupGroup({
+    this.id,
+    required this.label,
+    this.regionLabel,
+    this.lat,
+    this.lng,
+    this.mapUrl,
+    this.notes,
+    this.isCustom = false,
+    this.completed = false,
+    this.passengerCount = 0,
+    this.checkedInCount = 0,
+    this.passengers = const [],
+  });
+
+  bool get hasCoords => lat != null && lng != null;
+
+  factory PickupGroup.fromJson(Map<String, dynamic> json) {
+    double? asDouble(dynamic v) => v == null
+        ? null
+        : (v is num ? v.toDouble() : double.tryParse(v.toString()));
+    int asInt(dynamic v) =>
+        v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
+
+    return PickupGroup(
+      id: json['id'] == null ? null : asInt(json['id']),
+      label: json['label']?.toString() ?? 'จุดรับ',
+      regionLabel: json['region_label']?.toString(),
+      lat: asDouble(json['lat']),
+      lng: asDouble(json['lng']),
+      mapUrl: json['map_url']?.toString(),
+      notes: json['notes']?.toString(),
+      isCustom: json['is_custom'] == true,
+      completed: json['completed_at'] != null,
+      passengerCount: asInt(json['passenger_count']),
+      checkedInCount: asInt(json['checked_in_count']),
+      passengers: (json['passengers'] as List?)
+              ?.map(
+                (p) => PickupGroupPassenger.fromJson(
+                  Map<String, dynamic>.from(p as Map),
+                ),
+              )
+              .toList() ??
+          const [],
+    );
+  }
+}
+
+/// Who sits in a seat — overlaid onto the vehicle layout.
+class SeatOccupant {
+  final String name;
+  final String? nickname;
+  final String? bookingRef;
+  final bool checkedIn;
+
+  const SeatOccupant({
+    required this.name,
+    this.nickname,
+    this.bookingRef,
+    this.checkedIn = false,
+  });
+
+  /// Short label for the seat tile — nickname if present, else first name word.
+  String get shortLabel {
+    final nick = nickname?.trim() ?? '';
+    if (nick.isNotEmpty) return nick;
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return '';
+    return trimmed.split(RegExp(r'\s+')).first;
+  }
+
+  factory SeatOccupant.fromJson(Map<String, dynamic> json) {
+    return SeatOccupant(
+      name: json['name']?.toString() ?? '',
+      nickname: json['nickname']?.toString(),
+      bookingRef: json['booking_ref']?.toString(),
+      checkedIn: json['checked_in'] == true,
+    );
+  }
+}
+
+class Seat {
+  final String id;
+  final String label;
+  final SeatOccupant? occupant;
+
+  const Seat({required this.id, required this.label, this.occupant});
+
+  bool get occupied => occupant != null;
+
+  factory Seat.fromJson(Map<String, dynamic> json) {
+    final occ = json['occupant'];
+    return Seat(
+      id: json['id']?.toString() ?? '',
+      label: json['label']?.toString() ?? json['id']?.toString() ?? '',
+      occupant: occ is Map
+          ? SeatOccupant.fromJson(Map<String, dynamic>.from(occ))
+          : null,
+    );
+  }
+}
+
+/// The vehicle seat layout with occupants overlaid. Null for schedules without
+/// seat assignments (charters / join trips).
+class SeatMap {
+  final int rows;
+  final List<String> columns;
+  final List<Seat> seats;
+  final String? frontSeat;
+  final List<String> lastRowCenter;
+  final String frontLabel;
+  final String rearLabel;
+  final bool showDriver;
+  final int occupied;
+  final int total;
+
+  const SeatMap({
+    required this.rows,
+    required this.columns,
+    required this.seats,
+    this.frontSeat,
+    this.lastRowCenter = const [],
+    this.frontLabel = 'หน้ารถ',
+    this.rearLabel = 'ท้ายรถ',
+    this.showDriver = true,
+    this.occupied = 0,
+    this.total = 0,
+  });
+
+  Seat? seatById(String id) {
+    for (final seat in seats) {
+      if (seat.id == id) return seat;
+    }
+    return null;
+  }
+
+  factory SeatMap.fromJson(Map<String, dynamic> json) {
+    int asInt(dynamic v) =>
+        v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
+    List<String> asStrList(dynamic v) => (v as List?)
+            ?.map((e) => e?.toString() ?? '')
+            .toList() ??
+        const [];
+
+    final front = json['front_seat']?.toString().trim();
+    return SeatMap(
+      rows: asInt(json['rows']),
+      columns: asStrList(json['columns']),
+      seats: (json['seats'] as List?)
+              ?.map((s) => Seat.fromJson(Map<String, dynamic>.from(s as Map)))
+              .toList() ??
+          const [],
+      frontSeat: (front == null || front.isEmpty) ? null : front,
+      lastRowCenter: asStrList(json['last_row_center']),
+      frontLabel: json['front_label']?.toString() ?? 'หน้ารถ',
+      rearLabel: json['rear_label']?.toString() ?? 'ท้ายรถ',
+      showDriver: json['show_driver'] != false,
+      occupied: asInt(json['occupied']),
+      total: asInt(json['total']),
+    );
+  }
+}
+
 class TripManifest {
   final int bookingCount;
   final int checkedInCount;
   final int passengerCount;
   final List<ManifestEntry> entries;
+  final List<PickupGroup> pickupGroups;
+  final SeatMap? seatMap;
 
   const TripManifest({
     required this.bookingCount,
     required this.checkedInCount,
     required this.passengerCount,
     required this.entries,
+    this.pickupGroups = const [],
+    this.seatMap,
   });
 
   factory TripManifest.fromJson(Map<String, dynamic> json) {
@@ -130,6 +355,16 @@ class TripManifest {
               )
               .toList() ??
           const [],
+      pickupGroups: (json['pickup_groups'] as List?)
+              ?.map(
+                (g) =>
+                    PickupGroup.fromJson(Map<String, dynamic>.from(g as Map)),
+              )
+              .toList() ??
+          const [],
+      seatMap: json['seat_map'] is Map
+          ? SeatMap.fromJson(Map<String, dynamic>.from(json['seat_map'] as Map))
+          : null,
     );
   }
 }
