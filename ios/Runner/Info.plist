@@ -80,9 +80,9 @@
 		<string>fetch</string>
 		<string>remote-notification</string>
 	</array>
-	<!-- Image picker: attaching incident photos -->
+	<!-- Image picker: attaching incident photos. Scanner: the admin-issued login QR -->
 	<key>NSCameraUsageDescription</key>
-	<string>ลุยเลยเขาใช้กล้องเพื่อถ่ายภาพประกอบรายงานเหตุการณ์ระหว่างการเดินทาง</string>
+	<string>ลุยเลยเขาใช้กล้องเพื่อสแกน QR สำหรับเข้าสู่ระบบ และถ่ายภาพประกอบรายงานเหตุการณ์ระหว่างการเดินทาง</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>ลุยเลยเขาเข้าถึงคลังรูปภาพเพื่อแนบภาพประกอบรายงานเหตุการณ์ระหว่างการเดินทาง</string>
 </dict>
