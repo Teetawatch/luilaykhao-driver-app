@@ -47,3 +47,9 @@ app.*.map.json
 # Firebase (per-environment secrets — provide locally, never commit)
 **/google-services.json
 **/GoogleService-Info.plist
+
+# android/.gitignore already covers key.properties and android/**/*.jks. This
+# catches a keystore generated at the repo root by mistake — the real keystore
+# belongs outside the repo entirely.
+*.jks
+*.keystore
