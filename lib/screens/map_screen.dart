@@ -29,6 +29,11 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
   Timer? _uiTicker;
   bool _breakPromptOpen = false;
 
+  // Measured height of the bottom sheet, so the floating zoom / speed controls
+  // can sit just above it instead of being covered when a trip is active.
+  final GlobalKey _panelKey = GlobalKey();
+  double _panelHeight = 220;
+
   @override
   void initState() {
     super.initState();
@@ -57,6 +62,30 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
     }
   }
 
+  static const double _minZoom = 3;
+  static const double _maxZoom = 18;
+
+  /// Step the map zoom by [delta] (positive = in, negative = out), keeping the
+  /// camera centred where it is and clamping to the tile range.
+  void _zoomBy(double delta) {
+    final camera = _mapController.camera;
+    final target = (camera.zoom + delta).clamp(_minZoom, _maxZoom);
+    if (target != camera.zoom) {
+      _mapController.move(camera.center, target);
+    }
+  }
+
+  /// After layout, read the real bottom-sheet height so the floating controls
+  /// can be lifted above it. Guarded so it only rebuilds when the height moves.
+  void _measurePanel() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final height = _panelKey.currentContext?.size?.height;
+      if (height != null && mounted && (height - _panelHeight).abs() > 1) {
+        setState(() => _panelHeight = height);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<TripProvider>(
@@ -71,6 +100,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         }
 
         _maybeShowBreakPrompt(provider);
+        _measurePanel();
 
         return Scaffold(
           body: Stack(
@@ -95,6 +125,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       options: MapOptions(
         initialCenter: center,
         initialZoom: 15,
+        minZoom: _minZoom,
+        maxZoom: _maxZoom,
         onMapReady: () => setState(() => _isMapReady = true),
         onPositionChanged: (pos, hasGesture) {
           if (hasGesture && _isFollowing) {
@@ -396,9 +428,69 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
 
   Widget _buildFloatingControls(TripProvider provider) {
     return Positioned(
-      bottom: 240,
+      bottom: _panelHeight + 16,
       right: 16,
-      child: Column(children: [SpeedIndicator(speed: provider.currentSpeed)]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          _buildZoomControls(),
+          const SizedBox(height: 12),
+          SpeedIndicator(speed: provider.currentSpeed),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildZoomControls() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceLight,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _zoomButton(
+              icon: Icons.add_rounded,
+              tooltip: 'ซูมเข้า',
+              onTap: () => _zoomBy(1),
+            ),
+            const Divider(
+              height: 1,
+              thickness: 1,
+              indent: 10,
+              endIndent: 10,
+              color: AppTheme.border,
+            ),
+            _zoomButton(
+              icon: Icons.remove_rounded,
+              tooltip: 'ซูมออก',
+              onTap: () => _zoomBy(-1),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _zoomButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Icon(icon, color: AppTheme.textMain, size: 24),
+        ),
+      ),
     );
   }
 
@@ -408,6 +500,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       left: 0,
       right: 0,
       child: Container(
+        key: _panelKey,
         padding: const EdgeInsets.all(24),
         decoration: const BoxDecoration(
           color: AppTheme.surfaceLight,
