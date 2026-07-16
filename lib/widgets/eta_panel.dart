@@ -22,7 +22,6 @@ class ETAPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.surfaceLight,
         borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
-        boxShadow: AppTheme.softShadow,
         border: Border.all(color: AppTheme.bgLight),
       ),
       child: Column(

@@ -93,13 +93,9 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                     padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
                     decoration: const BoxDecoration(
                       color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0x1A000000),
-                          blurRadius: 20,
-                          offset: Offset(0, -8),
-                        ),
-                      ],
+                      border: Border(
+                        top: BorderSide(color: AppTheme.border),
+                      ),
                     ),
                     child: Row(
                       children: [
@@ -191,7 +187,7 @@ class _DriverHeader extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: AppTheme.softShadow,
+        border: Border.all(color: AppTheme.border),
       ),
       child: Row(
         children: [
@@ -260,10 +256,9 @@ class _ScheduleCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: selected ? AppTheme.accentColor : const Color(0xFFE5E7EB),
-              width: selected ? 2 : 1,
+              color: selected ? AppTheme.accentColor : AppTheme.border,
+              width: selected ? 1.5 : 1,
             ),
-            boxShadow: selected ? AppTheme.activeShadow : AppTheme.softShadow,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -364,7 +359,7 @@ class _EmptyTrips extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: AppTheme.softShadow,
+        border: Border.all(color: AppTheme.border),
       ),
       child: Column(
         children: [

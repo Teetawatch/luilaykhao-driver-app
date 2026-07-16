@@ -378,7 +378,7 @@ class _LocationTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.surfaceLight,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: AppTheme.softShadow,
+        border: Border.all(color: AppTheme.border),
       ),
       child: Row(
         children: [
@@ -440,7 +440,7 @@ class _PhotoTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppTheme.surfaceLight,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: AppTheme.softShadow,
+          border: Border.all(color: AppTheme.border),
         ),
         child: Row(
           children: [

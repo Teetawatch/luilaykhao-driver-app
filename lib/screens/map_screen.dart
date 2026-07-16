@@ -193,7 +193,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
                 color: pinColor,
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 2.5),
-                boxShadow: AppTheme.softShadow,
               ),
               child: Icon(
                 done
@@ -237,7 +236,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(6),
-            boxShadow: AppTheme.softShadow,
           ),
           child: Text(
             group.label,
@@ -288,7 +286,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         color: AppTheme.accentColor,
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 3),
-        boxShadow: AppTheme.softShadow,
       ),
       child: const Icon(
         Icons.airport_shuttle_rounded,
@@ -321,7 +318,7 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
             decoration: BoxDecoration(
               color: AppTheme.surfaceLight,
               borderRadius: BorderRadius.circular(20),
-              boxShadow: AppTheme.softShadow,
+              border: Border.all(color: AppTheme.border),
             ),
             child: Row(
               children: [
@@ -356,16 +353,10 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
       child: Container(
         width: 48,
         height: 48,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: AppTheme.surfaceLight,
           shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 10,
-              offset: Offset(0, 4),
-            ),
-          ],
+          border: Border.all(color: AppTheme.border),
         ),
         child: Icon(icon, color: AppTheme.textMain),
       ),
@@ -382,7 +373,6 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         decoration: BoxDecoration(
           color: AppTheme.warningColor,
           borderRadius: BorderRadius.circular(14),
-          boxShadow: AppTheme.softShadow,
         ),
         child: const Row(
           children: [
@@ -421,14 +411,8 @@ class _MapScreenState extends State<MapScreen> with TickerProviderStateMixin {
         padding: const EdgeInsets.all(24),
         decoration: const BoxDecoration(
           color: AppTheme.surfaceLight,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 20,
-              offset: Offset(0, -5),
-            ),
-          ],
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border(top: BorderSide(color: AppTheme.border)),
         ),
         child: SafeArea(
           top: false,

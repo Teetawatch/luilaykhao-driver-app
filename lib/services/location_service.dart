@@ -58,28 +58,43 @@ class LocationService {
   }
 
   /// Start tracking location updates. On Android this runs as a foreground
-  /// location service so updates can continue while the app is backgrounded.
+  /// location service and on iOS as a background location session, so updates
+  /// can continue while the app is backgrounded on both platforms.
   void startTracking() {
-    final locationSettings = Platform.isAndroid
-        ? AndroidSettings(
-            accuracy: LocationAccuracy.bestForNavigation,
-            distanceFilter: 5,
-            intervalDuration: const Duration(seconds: 5),
-            foregroundNotificationConfig: const ForegroundNotificationConfig(
-              notificationTitle: 'กำลังแชร์ตำแหน่งรถตู้',
-              notificationText: 'ลุยเลยเขากำลังส่งตำแหน่งแบบ Real-Time',
-              notificationIcon: AndroidResource(
-                name: 'ic_launcher',
-                defType: 'mipmap',
-              ),
-              enableWakeLock: true,
-              setOngoing: true,
-            ),
-          )
-        : const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            distanceFilter: 5,
-          );
+    final LocationSettings locationSettings;
+    if (Platform.isAndroid) {
+      locationSettings = AndroidSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        distanceFilter: 5,
+        intervalDuration: const Duration(seconds: 5),
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationTitle: 'กำลังแชร์ตำแหน่งรถตู้',
+          notificationText: 'ลุยเลยเขากำลังส่งตำแหน่งแบบ Real-Time',
+          notificationIcon: AndroidResource(
+            name: 'ic_launcher',
+            defType: 'mipmap',
+          ),
+          enableWakeLock: true,
+          setOngoing: true,
+        ),
+      );
+    } else if (Platform.isIOS) {
+      locationSettings = AppleSettings(
+        accuracy: LocationAccuracy.bestForNavigation,
+        activityType: ActivityType.automotiveNavigation,
+        distanceFilter: 5,
+        // Keep streaming location while the app is backgrounded. Requires the
+        // `location` UIBackgroundMode and the "Always" location permission.
+        allowBackgroundLocationUpdates: true,
+        pauseLocationUpdatesAutomatically: false,
+        showBackgroundLocationIndicator: true,
+      );
+    } else {
+      locationSettings = const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5,
+      );
+    }
 
     _positionSubscription =
         Geolocator.getPositionStream(locationSettings: locationSettings).listen(

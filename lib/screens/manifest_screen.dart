@@ -191,7 +191,7 @@ class _ManifestHeader extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: AppTheme.softShadow,
+        border: Border.all(color: AppTheme.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -294,7 +294,6 @@ class _BookingCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: AppTheme.softShadow,
         border: Border.all(
           color: entry.checkedIn
               ? AppTheme.successColor.withValues(alpha: 0.4)

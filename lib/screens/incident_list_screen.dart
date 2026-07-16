@@ -263,7 +263,6 @@ class _IncidentCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.surfaceLight,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: AppTheme.softShadow,
         border: Border.all(
           color: incident.isResolved
               ? const Color(0xFFE5E7EB)

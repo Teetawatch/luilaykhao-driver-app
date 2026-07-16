@@ -16,7 +16,6 @@ class SpeedIndicator extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.surfaceLight,
         shape: BoxShape.circle,
-        boxShadow: AppTheme.softShadow,
         border: Border.all(
           color: _getSpeedColor(displaySpeed.toDouble()).withValues(alpha: 0.5),
           width: 3,

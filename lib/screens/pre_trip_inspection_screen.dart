@@ -379,7 +379,6 @@ class _InspectionTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.surfaceLight,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: AppTheme.softShadow,
         border: Border.all(
           color: value
               ? AppTheme.successColor.withValues(alpha: 0.4)

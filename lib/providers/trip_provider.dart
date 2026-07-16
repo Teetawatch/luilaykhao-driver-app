@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/api_config.dart';
 import '../models/incident_model.dart';
 import '../models/inspection_model.dart';
 import '../models/manifest_model.dart';
@@ -12,9 +13,9 @@ import '../models/van_model.dart';
 import '../services/location_service.dart';
 
 class TripProvider extends ChangeNotifier {
-  // Production
-  static const String baseUrl = 'https://luilaykhao.com/api/v1';
-  // Android Emulator (local dev): 'http://10.0.2.2:8000/api/v1'
+  // Endpoint is configurable at build time via --dart-define=API_BASE_URL.
+  // Defaults to production. See lib/config/api_config.dart.
+  static const String baseUrl = ApiConfig.baseUrl;
 
   final LocationService _locationService = LocationService();
   static const String _tokenKey = 'driver_auth_token';
