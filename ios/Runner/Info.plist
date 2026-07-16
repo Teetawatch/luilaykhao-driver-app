@@ -78,6 +78,7 @@
 	<array>
 		<string>location</string>
 		<string>fetch</string>
+		<string>remote-notification</string>
 	</array>
 	<!-- Image picker: attaching incident photos -->
 	<key>NSCameraUsageDescription</key>

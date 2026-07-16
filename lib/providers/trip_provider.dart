@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
+import '../services/push_notification_service.dart';
 import '../models/incident_model.dart';
 import '../models/inspection_model.dart';
 import '../models/manifest_model.dart';
@@ -103,6 +104,7 @@ class TripProvider extends ChangeNotifier {
       return;
     }
 
+    _registerPushToken();
     await fetchDriverContext();
     _isRestoringSession = false;
     notifyListeners();
@@ -147,6 +149,7 @@ class TripProvider extends ChangeNotifier {
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_tokenKey, _token!);
+      _registerPushToken();
       await fetchDriverContext();
       return true;
     } catch (e) {
@@ -187,6 +190,7 @@ class TripProvider extends ChangeNotifier {
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_tokenKey, _token!);
+      _registerPushToken();
       return true;
     } catch (e) {
       _statusMessage = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
@@ -197,7 +201,26 @@ class TripProvider extends ChangeNotifier {
     }
   }
 
+  /// Register this device with the backend so the signed-in driver receives
+  /// push notifications. No-op when Firebase isn't configured.
+  void _registerPushToken() {
+    final token = _token;
+    if (token == null || token.isEmpty) return;
+    PushNotificationService.instance.syncToken(
+      baseUrl: baseUrl,
+      authToken: token,
+    );
+  }
+
   Future<void> logout() async {
+    final token = _token;
+    if (token != null && token.isNotEmpty) {
+      await PushNotificationService.instance.unregisterToken(
+        baseUrl: baseUrl,
+        authToken: token,
+      );
+    }
+
     try {
       if (_token != null) {
         await http.post(
