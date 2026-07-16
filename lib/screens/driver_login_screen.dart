@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/trip_provider.dart';
 import '../theme/app_theme.dart';
+import 'qr_login_screen.dart';
 
 class DriverLoginScreen extends StatefulWidget {
   const DriverLoginScreen({super.key});
@@ -107,6 +108,25 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
                   textStyle: GoogleFonts.anuphan(
                     fontSize: 18,
                     fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: provider.isLoggingIn
+                    ? null
+                    : () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const QrLoginScreen(),
+                        ),
+                      ),
+                icon: const Icon(Icons.qr_code_scanner_rounded),
+                label: const Text('สแกน QR แทนการกรอกรหัส'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 52),
+                  textStyle: GoogleFonts.anuphan(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),

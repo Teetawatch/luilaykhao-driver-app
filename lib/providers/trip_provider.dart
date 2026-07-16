@@ -161,20 +161,43 @@ class TripProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> loginWithDriverPin(String driverPin) async {
+  Future<bool> loginWithDriverPin(String driverPin) {
+    return _driverLogin(
+      path: 'driver/pin-login',
+      body: {'driver_pin': driverPin},
+      fallbackError: 'ไม่พบรหัสคนขับนี้',
+    );
+  }
+
+  /// Log in with a single-use QR code issued by an admin — no PIN typing.
+  Future<bool> loginWithQrCode(String code) {
+    return _driverLogin(
+      path: 'driver/qr-login',
+      body: {'code': code},
+      fallbackError: 'QR ใช้ไม่ได้ กรุณาให้แอดมินสร้างใหม่',
+    );
+  }
+
+  /// Shared driver sign-in: both PIN and QR return the same
+  /// {token, user, schedules} payload.
+  Future<bool> _driverLogin({
+    required String path,
+    required Map<String, String> body,
+    required String fallbackError,
+  }) async {
     _isLoggingIn = true;
     _statusMessage = '';
     notifyListeners();
 
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/driver/pin-login'),
+        Uri.parse('$baseUrl/$path'),
         headers: const {'Accept': 'application/json'},
-        body: {'driver_pin': driverPin},
+        body: body,
       );
       final result = json.decode(response.body) as Map<String, dynamic>;
       if (response.statusCode != 200 || result['success'] != true) {
-        _statusMessage = result['message']?.toString() ?? 'ไม่พบรหัสคนขับนี้';
+        _statusMessage = result['message']?.toString() ?? fallbackError;
         return false;
       }
 
